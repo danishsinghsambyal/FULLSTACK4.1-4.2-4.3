@@ -1,0 +1,79 @@
+4.3
+const express = require("express");
+const app = express();
+
+// Use the port provided by the platform or fallback to 3000
+const PORT = process.env.PORT || 3000;
+
+app.use(express.json());
+
+// Seats state
+let seats = {
+  1: { status: "available" },
+  2: { status: "available" },
+  3: { status: "available" },
+  4: { status: "available" },
+  5: { status: "available" }
+};
+
+// Store lock timers
+let lockTimers = {};
+
+// GET all seats
+app.get("/seats", (req, res) => {
+  res.json(seats);
+});
+
+// POST lock a seat
+app.post("/lock/:id", (req, res) => {
+  const seatId = req.params.id;
+
+  if (!seats[seatId]) {
+    return res.status(404).json({ message: "Seat not found" });
+  }
+
+  if (seats[seatId].status === "booked") {
+    return res.status(400).json({ message: "Seat already booked" });
+  }
+
+  if (seats[seatId].status === "locked") {
+    return res.status(400).json({ message: "Seat is already locked" });
+  }
+
+  // Lock seat
+  seats[seatId].status = "locked";
+
+  // Auto-unlock after 1 minute
+  if (lockTimers[seatId]) clearTimeout(lockTimers[seatId]);
+  lockTimers[seatId] = setTimeout(() => {
+    if (seats[seatId].status === "locked") {
+      seats[seatId].status = "available";
+    }
+  }, 60000);
+
+  res.json({ message: `Seat ${seatId} locked successfully. Confirm within 1 minute.` });
+});
+
+// POST confirm booking
+app.post("/confirm/:id", (req, res) => {
+  const seatId = req.params.id;
+
+  if (!seats[seatId]) {
+    return res.status(404).json({ message: "Seat not found" });
+  }
+
+  if (seats[seatId].status !== "locked") {
+    return res.status(400).json({ message: "Seat must be locked before confirmation" });
+  }
+
+  seats[seatId].status = "booked";
+  if (lockTimers[seatId]) clearTimeout(lockTimers[seatId]);
+  delete lockTimers[seatId];
+
+  res.json({ message: `Seat ${seatId} booked successfully!` });
+});
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`✅ Server running at http://localhost:${PORT}`);
+});
